@@ -209,6 +209,26 @@
         </div>
     </div>
 
+    <!-- Tela do Dashboard Admin -->
+    <div id="adminDashboard" class="hidden container mx-auto mt-10 p-4">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Dashboard Administrativo</h1>
+            <div class="flex space-x-4">
+                <button onclick="showAdminDashboard()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                    Dashboard
+                </button>
+                <button onclick="showAdminSupportScreen()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                    Suporte
+                </button>
+            </div>
+        </div>
+
+        <!-- Conteúdo do dashboard será adicionado aqui -->
+        <div id="adminDashboardContent" class="space-y-8">
+            <!-- Os dados serão carregados dinamicamente -->
+        </div>
+    </div>
+
     <script>
         // Declare todas as variáveis e funções primeiro
         let map, originMarker, destinationMarker, directionsRenderer;
@@ -397,15 +417,23 @@
                     localStorage.setItem('token', data.token);
                     currentUser = data.user;
                     
-                    if (email.includes('admin')) {
-                        showAdminSupportScreen();
-                    } else if (email.includes('driver')) {
+                    // Atualiza o nome do usuário na interface
+                    document.getElementById('userName').textContent = currentUser.email;
+                    document.getElementById('userInfo').classList.remove('hidden');
+                    document.getElementById('loginScreen').classList.add('hidden');
+
+                    // Verifica o tipo de usuário e mostra a tela apropriada
+                    if (currentUser.role === 'admin') {
+                        showAdminDashboard();
+                    } else if (currentUser.role === 'driver') {
                         showDriverScreen();
                     } else {
                         showMainScreen();
                     }
                     
                     saveAppState();
+                } else {
+                    alert('Email ou senha inválidos');
                 }
             } catch (error) {
                 console.error('Login error:', error);
@@ -527,11 +555,28 @@
         }
 
         function logout() {
+            // Limpa dados do localStorage
             localStorage.removeItem('token');
             localStorage.removeItem('appState');
+            
+            // Limpa variáveis globais
             currentUser = null;
             currentRide = null;
-            showLoginScreen();
+            selectedUserId = null;
+            
+            // Para todos os pollings
+            if (availableRidesInterval) clearInterval(availableRidesInterval);
+            if (supportPollingInterval) clearInterval(supportPollingInterval);
+            
+            // Esconde todas as telas
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('driverScreen').classList.add('hidden');
+            document.getElementById('adminSupportScreen').classList.add('hidden');
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+            
+            // Mostra tela de login
+            document.getElementById('loginScreen').classList.remove('hidden');
         }
 
         async function checkAuth() {
@@ -542,14 +587,16 @@
             }
 
             const state = loadAppState();
-            if (state) {
-                // Restaura o estado do usuário
-                document.getElementById('userName').textContent = state.currentUser.email;
+            if (state && state.currentUser) {
+                currentUser = state.currentUser;
+                document.getElementById('userName').textContent = currentUser.email;
                 document.getElementById('userInfo').classList.remove('hidden');
                 document.getElementById('loginScreen').classList.add('hidden');
 
-                // Restaura a tela correta
-                if (state.isDriver) {
+                // Restaura a tela correta baseado no tipo de usuário
+                if (currentUser.role === 'admin') {
+                    showAdminDashboard();
+                } else if (currentUser.role === 'driver') {
                     showDriverScreen();
                     if (currentRide) {
                         showCurrentRide(currentRide);
@@ -559,42 +606,7 @@
                 } else {
                     showMainScreen();
                     if (currentRide) {
-                        try {
-                            // Restaura o estado da corrida para passageiro
-                            const response = await fetch(`/rides/${currentRide._id}/status`, {
-                                headers: {
-                                    'Authorization': `Bearer ${token}`
-                                }
-                            });
-                            
-                            if (!response.ok) {
-                                throw new Error('Falha ao recuperar status da corrida');
-                            }
-
-                            const data = await response.json();
-                            if (data.success) {
-                                // Mostra o status da corrida
-                                document.getElementById('rideStatus').classList.remove('hidden');
-                                updateRideStatus(data.ride);
-                                
-                                // Atualiza o mapa com a rota
-                                const origin = document.getElementById('origin');
-                                const destination = document.getElementById('destination');
-                                origin.value = data.ride.origin;
-                                destination.value = data.ride.destination;
-                                
-                                // Recalcula e mostra a rota no mapa
-                                calculateRoute(data.ride.origin, data.ride.destination);
-                                
-                                // Inicia o polling de status
-                                initializeRidePolling();
-                            }
-                        } catch (error) {
-                            console.error('Erro ao recuperar corrida:', error);
-                            // Se houver erro, limpa o estado da corrida
-                            currentRide = null;
-                            saveAppState();
-                        }
+                        updateRideStatus(currentRide);
                     }
                 }
             } else {
@@ -1255,6 +1267,22 @@
                 console.error('Erro ao enviar mensagem:', error);
             }
         };
+
+        // Adicione a função para mostrar o dashboard admin
+        function showAdminDashboard() {
+            // Esconde outras telas
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('driverScreen').classList.add('hidden');
+            document.getElementById('adminSupportScreen').classList.add('hidden');
+            
+            // Mostra o dashboard admin
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            
+            // Carrega dados iniciais do dashboard
+            loadAdminDashboardData();
+        }
     </script>
 </body>
 </html> 
