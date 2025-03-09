@@ -156,6 +156,59 @@
         </div>
     </div>
 
+    <!-- Tela de Suporte Admin -->
+    <div id="adminSupportScreen" class="hidden container mx-auto mt-10 p-4">
+        <div class="flex h-[calc(100vh-200px)] bg-white rounded-lg shadow-lg">
+            <!-- Lista de conversas -->
+            <div class="w-1/3 border-r">
+                <div class="p-4 border-b">
+                    <h2 class="text-lg font-semibold">Conversas de Suporte</h2>
+                </div>
+                <div id="supportConversations" class="overflow-y-auto h-full">
+                    <!-- Conversas serão inseridas aqui -->
+                </div>
+            </div>
+
+            <!-- Área de chat -->
+            <div class="flex-1 flex flex-col">
+                <div id="chatArea" class="flex-1 flex items-center justify-center text-gray-500">
+                    Selecione uma conversa para começar
+                </div>
+
+                <div id="activeChatArea" class="flex-1 flex flex-col hidden">
+                    <!-- Cabeçalho do chat -->
+                    <div class="p-4 border-b bg-gray-50">
+                        <div id="chatUserName" class="font-medium"></div>
+                        <div id="chatUserRole" class="text-sm text-gray-500"></div>
+                    </div>
+
+                    <!-- Mensagens -->
+                    <div id="messagesArea" class="flex-1 overflow-y-auto p-4 space-y-4">
+                        <!-- Mensagens serão inseridas aqui -->
+                    </div>
+
+                    <!-- Formulário de mensagem -->
+                    <form id="messageForm" class="p-4 border-t bg-gray-50">
+                        <div class="flex space-x-2">
+                            <input
+                                type="text"
+                                id="messageInput"
+                                placeholder="Digite sua mensagem..."
+                                class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                            <button
+                                type="submit"
+                                class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                            >
+                                Enviar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Declare todas as variáveis e funções primeiro
         let map, originMarker, destinationMarker, directionsRenderer;
@@ -164,6 +217,8 @@
         let originAutocomplete, destinationAutocomplete;
         let driverMap, driverDirectionsRenderer;
         let availableRidesInterval;
+        let selectedUserId = null;
+        let supportPollingInterval = null;
 
         // Função que será chamada quando o Google Maps carregar
         function initGoogleMaps() {
@@ -342,14 +397,14 @@
                     localStorage.setItem('token', data.token);
                     currentUser = data.user;
                     
-                    // Verifica se é motorista ou passageiro
-                    if (email.includes('driver')) {
+                    if (email.includes('admin')) {
+                        showAdminSupportScreen();
+                    } else if (email.includes('driver')) {
                         showDriverScreen();
                     } else {
                         showMainScreen();
                     }
                     
-                    // Salva o estado após login
                     saveAppState();
                 }
             } catch (error) {
@@ -1031,6 +1086,175 @@
             script.defer = true;
             document.body.appendChild(script);
         });
+
+        // Função para mostrar a tela de suporte admin
+        function showAdminSupportScreen() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('driverScreen').classList.add('hidden');
+            document.getElementById('adminSupportScreen').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            
+            loadSupportConversations();
+            startSupportPolling();
+        }
+
+        // Carregar conversas de suporte
+        async function loadSupportConversations() {
+            try {
+                const response = await fetch('/messages/support/conversations', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                const data = await response.json();
+                updateConversationsList(data);
+            } catch (error) {
+                console.error('Erro ao carregar conversas:', error);
+            }
+        }
+
+        // Atualizar lista de conversas
+        function updateConversationsList(conversations) {
+            const container = document.getElementById('supportConversations');
+            container.innerHTML = '';
+
+            conversations.forEach(conv => {
+                const conversationEl = document.createElement('button');
+                conversationEl.className = `w-full p-4 text-left hover:bg-gray-50 border-b relative ${
+                    selectedUserId === conv.userId ? 'bg-blue-50' : ''
+                }`;
+                
+                conversationEl.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-medium flex items-center">
+                                ${conv.userName}
+                                <span class="ml-2 text-xs px-2 py-1 bg-gray-200 rounded-full">
+                                    ${conv.userRole === 'driver' ? 'Motorista' : 'Passageiro'}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-500 truncate mt-1">
+                                ${conv.lastMessage}
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            ${formatLastMessageTime(conv.lastMessageAt)}
+                        </div>
+                    </div>
+                    ${conv.unreadCount > 0 ? `
+                        <span class="absolute top-4 right-4 bg-blue-500 text-white text-xs rounded-full px-2 py-1">
+                            ${conv.unreadCount}
+                        </span>
+                    ` : ''}
+                `;
+
+                conversationEl.onclick = () => selectConversation(conv.userId);
+                container.appendChild(conversationEl);
+            });
+        }
+
+        // Selecionar uma conversa
+        async function selectConversation(userId) {
+            selectedUserId = userId;
+            document.getElementById('chatArea').classList.add('hidden');
+            document.getElementById('activeChatArea').classList.remove('hidden');
+            
+            await loadUserMessages(userId);
+            startMessagePolling(userId);
+        }
+
+        // Carregar mensagens do usuário
+        async function loadUserMessages(userId) {
+            try {
+                const response = await fetch(`/messages/support/user/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                const messages = await response.json();
+                updateMessagesList(messages);
+            } catch (error) {
+                console.error('Erro ao carregar mensagens:', error);
+            }
+        }
+
+        // Atualizar lista de mensagens
+        function updateMessagesList(messages) {
+            const container = document.getElementById('messagesArea');
+            container.innerHTML = '';
+
+            messages.forEach(message => {
+                const messageEl = document.createElement('div');
+                const isAdmin = message.sender._id === currentUser.id;
+                
+                messageEl.className = `flex ${isAdmin ? 'justify-end' : 'justify-start'}`;
+                messageEl.innerHTML = `
+                    <div class="max-w-[70%] rounded-lg p-3 ${
+                        isAdmin ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-900'
+                    }">
+                        <p class="text-sm font-medium mb-1">${message.sender.name}</p>
+                        <p class="text-sm">${message.content}</p>
+                        <span class="text-xs opacity-75 mt-1 block">
+                            ${formatLastMessageTime(message.createdAt)}
+                        </span>
+                    </div>
+                `;
+                
+                container.appendChild(messageEl);
+            });
+
+            // Rola para a última mensagem
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Iniciar polling de suporte
+        function startSupportPolling() {
+            if (supportPollingInterval) {
+                clearInterval(supportPollingInterval);
+            }
+            supportPollingInterval = setInterval(loadSupportConversations, 5000);
+        }
+
+        // Parar polling de suporte
+        function stopSupportPolling() {
+            if (supportPollingInterval) {
+                clearInterval(supportPollingInterval);
+                supportPollingInterval = null;
+            }
+        }
+
+        // Configurar formulário de mensagem
+        document.getElementById('messageForm').onsubmit = async (e) => {
+            e.preventDefault();
+            if (!selectedUserId) return;
+
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            if (!content) return;
+
+            try {
+                const response = await fetch('/messages/support/reply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: selectedUserId,
+                        content
+                    })
+                });
+
+                const message = await response.json();
+                updateMessagesList([...messages, message]);
+                input.value = '';
+            } catch (error) {
+                console.error('Erro ao enviar mensagem:', error);
+            }
+        };
     </script>
 </body>
 </html> 
