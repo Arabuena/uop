@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bora - App de Corridas</title>
+    
+    <!-- Carregamento do Tailwind via CDN (apenas para desenvolvimento) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        #map, #driverMap {
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-indigo-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Bora</h1>
+            <div id="userInfo" class="hidden">
+                <span id="userName"></span>
+                <button onclick="logout()" class="ml-4 bg-red-500 px-4 py-2 rounded">Sair</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Tela de Login -->
+    <div id="loginScreen" class="container mx-auto mt-10 max-w-md">
+        <div class="bg-white p-8 rounded-lg shadow-lg">
+            <h2 class="text-2xl font-bold mb-6 text-center">Login</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 mb-2">Email</label>
+                    <input type="email" id="email" class="w-full p-2 border rounded" value="test@example.com">
+                </div>
+                <div>
+                    <label class="block text-gray-700 mb-2">Senha</label>
+                    <input type="password" id="password" class="w-full p-2 border rounded" value="123456">
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700">
+                    Entrar
+                </button>
+            </form>
+            <div class="mt-4 text-center">
+                <a href="#" onclick="showRegister()" class="text-indigo-600 hover:text-indigo-800">
+                    Criar nova conta
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela Principal (após login) -->
+    <div id="mainScreen" class="hidden container mx-auto mt-10 p-4">
+        <!-- Grid container com ordem diferente para mobile -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Mapa - ordem 1 em mobile, 2 em desktop -->
+            <div class="bg-white p-6 rounded-lg shadow-lg order-1 md:order-2">
+                <div id="map"></div>
+            </div>
+
+            <!-- Formulário de Corrida - ordem 2 em mobile, 1 em desktop -->
+            <div class="bg-white p-6 rounded-lg shadow-lg order-2 md:order-1">
+                <h3 class="text-xl font-bold mb-4">Solicitar Corrida</h3>
+                <form id="rideForm" class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Origem</label>
+                        <input type="text" id="origin" class="w-full p-2 border rounded" placeholder="Digite o endereço de origem">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Destino</label>
+                        <input type="text" id="destination" class="w-full p-2 border rounded" placeholder="Digite o endereço de destino">
+                    </div>
+                    <button type="submit" class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
+                        Solicitar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Status da Corrida -->
+        <div id="rideStatus" class="hidden mt-8 bg-white p-6 rounded-lg shadow-lg">
+            <h3 class="text-xl font-bold mb-4">Status da Corrida</h3>
+            <div id="rideInfo" class="space-y-2">
+                <!-- Informações da corrida serão inseridas aqui -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela do Motorista -->
+    <div id="driverScreen" class="hidden container mx-auto mt-10 p-4">
+        <!-- Status do Motorista -->
+        <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Status do Motorista</h3>
+                <div class="flex items-center">
+                    <span id="driverStatus" class="mr-4 text-gray-600">Offline</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="statusToggle" class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+            </div>
+            <div id="driverInfo" class="space-y-2">
+                <p><strong>Total de corridas hoje:</strong> <span id="ridesCount">0</span></p>
+                <p><strong>Ganhos hoje:</strong> R$ <span id="earningsToday">0.00</span></p>
+            </div>
+        </div>
+
+        <!-- Corridas Disponíveis -->
+        <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+            <h3 class="text-xl font-bold mb-4">Corridas Disponíveis</h3>
+            <div id="availableRides" class="space-y-4">
+                <!-- As corridas disponíveis serão inseridas aqui -->
+            </div>
+        </div>
+
+        <!-- Corrida Atual -->
+        <div id="currentRideCard" class="hidden bg-white p-6 rounded-lg shadow-lg">
+            <h3 class="text-xl font-bold mb-4">Corrida em Andamento</h3>
+            <div id="currentRideInfo" class="space-y-4">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Passageiro</p>
+                            <p id="passengerName" class="font-medium"></p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Origem</p>
+                            <p id="currentRideOrigin" class="font-medium"></p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Destino</p>
+                            <p id="currentRideDestination" class="font-medium"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="startRideBtn" class="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600">
+                        Iniciar Corrida
+                    </button>
+                    <button id="finishRideBtn" class="hidden flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                        Finalizar Corrida
+                    </button>
+                    <button id="cancelRideBtn" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Declare todas as variáveis e funções primeiro
+        let map, originMarker, destinationMarker, directionsRenderer;
+        let currentUser = null;
+        let currentRide = null;
+        let originAutocomplete, destinationAutocomplete;
+        let driverMap, driverDirectionsRenderer;
+        let availableRidesInterval;
+
+        // Função que será chamada quando o Google Maps carregar
+        function initGoogleMaps() {
+            initMap();
+            initAutocomplete();
+            
+            // Verifica autenticação e configura listeners
+            checkAuth();
+            setupEventListeners();
+            initializeRidePolling();
+        }
+
+        function saveAppState() {
+            const state = {
+                currentUser: currentUser,
+                currentRide: currentRide,
+                isDriver: currentUser?.email.includes('driver'),
+                lastScreen: document.getElementById('driverScreen').classList.contains('hidden') ? 'main' : 'driver'
+            };
+            localStorage.setItem('appState', JSON.stringify(state));
+        }
+
+        function loadAppState() {
+            const savedState = localStorage.getItem('appState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                currentUser = state.currentUser;
+                currentRide = state.currentRide;
+                return state;
+            }
+            return null;
+        }
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: -23.550520, lng: -46.633308 }, // São Paulo
+                zoom: 12,
+                mapTypeControl: false
+            });
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            directionsRenderer.setMap(map);
+        }
+
+        function initAutocomplete() {
+            // Opções do autocomplete
+            const options = {
+                componentRestrictions: { country: 'br' },
+                fields: ['formatted_address', 'geometry', 'name'],
+                strictBounds: false
+            };
+
+            // Inicializa autocomplete para origem
+            originAutocomplete = new google.maps.places.Autocomplete(
+                document.getElementById('origin'),
+                options
+            );
+
+            // Inicializa autocomplete para destino
+            destinationAutocomplete = new google.maps.places.Autocomplete(
+                document.getElementById('destination'),
+                options
+            );
+
+            // Listeners para quando um lugar é selecionado
+            originAutocomplete.addListener('place_changed', () => {
+                const place = originAutocomplete.getPlace();
+                if (place.geometry) {
+                    updateOriginMarker(place.geometry.location);
+                    tryDrawRoute();
+                }
+            });
+
+            destinationAutocomplete.addListener('place_changed', () => {
+                const place = destinationAutocomplete.getPlace();
+                if (place.geometry) {
+                    updateDestinationMarker(place.geometry.location);
+                    tryDrawRoute();
+                }
+            });
+        }
+
+        function updateOriginMarker(location) {
+            if (originMarker) {
+                originMarker.setMap(null);
+            }
+            originMarker = new google.maps.Marker({
+                map: map,
+                position: location,
+                title: 'Origem',
+                icon: {
+                    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+                }
+            });
+            map.panTo(location);
+        }
+
+        function updateDestinationMarker(location) {
+            if (destinationMarker) {
+                destinationMarker.setMap(null);
+            }
+            destinationMarker = new google.maps.Marker({
+                map: map,
+                position: location,
+                title: 'Destino',
+                icon: {
+                    url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                }
+            });
+            map.panTo(location);
+        }
+
+        function tryDrawRoute() {
+            const origin = document.getElementById('origin').value;
+            const destination = document.getElementById('destination').value;
+
+            if (origin && destination) {
+                calculateRoute(origin, destination)
+                    .then(routeDetails => {
+                        // Atualiza a interface com os detalhes da rota
+                        showRouteDetails(routeDetails);
+                    })
+                    .catch(error => {
+                        console.error('Erro ao calcular rota:', error);
+                    });
+            }
+        }
+
+        function showRouteDetails(routeDetails) {
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'bg-white p-4 rounded-lg shadow mt-4';
+            detailsDiv.innerHTML = `
+                <h4 class="font-bold mb-2">Detalhes da Rota</h4>
+                <p><strong>Distância:</strong> ${routeDetails.leg.distance.text}</p>
+                <p><strong>Tempo estimado:</strong> ${routeDetails.leg.duration.text}</p>
+                <p><strong>Preço estimado:</strong> R$ ${routeDetails.price}</p>
+            `;
+
+            // Remove detalhes anteriores se existirem
+            const oldDetails = document.querySelector('.route-details');
+            if (oldDetails) {
+                oldDetails.remove();
+            }
+
+            detailsDiv.classList.add('route-details');
+            document.getElementById('rideForm').appendChild(detailsDiv);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('rideForm').addEventListener('submit', handleRideRequest);
+
+            // Previne o envio do formulário ao pressionar Enter nos campos de endereço
+            ['origin', 'destination'].forEach(id => {
+                document.getElementById(id).addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                    }
+                });
+            });
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    currentUser = data.user;
+                    
+                    // Verifica se é motorista ou passageiro
+                    if (email.includes('driver')) {
+                        showDriverScreen();
+                    } else {
+                        showMainScreen();
+                    }
+                    
+                    // Salva o estado após login
+                    saveAppState();
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Erro ao fazer login');
+            }
+        }
+
+        function showMainScreen() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('userName').textContent = currentUser.email;
+        }
+
+        function showDriverScreen() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('driverScreen').classList.remove('hidden');
+            document.getElementById('userInfo').classList.remove('hidden');
+            document.getElementById('userName').textContent = currentUser.email;
+            
+            // Inicializa o modo motorista
+            initializeDriverMode();
+        }
+
+        async function handleRideRequest(e) {
+            e.preventDefault();
+            const origin = document.getElementById('origin').value;
+            const destination = document.getElementById('destination').value;
+
+            try {
+                // Primeiro calcula a rota e preço
+                const routeDetails = await calculateRoute(origin, destination);
+                
+                // Solicita a corrida
+                const response = await fetch('/rides/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        origin,
+                        destination,
+                        distance: routeDetails.distance,
+                        estimatedPrice: routeDetails.price,
+                        estimatedTime: routeDetails.duration
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    currentRide = data.ride;
+                    showRideStatus(routeDetails);
+                    startRideStatusPolling();
+                }
+            } catch (error) {
+                console.error('Erro ao solicitar corrida:', error);
+                alert('Não foi possível solicitar a corrida');
+            }
+        }
+
+        async function calculateRoute(origin, destination) {
+            return new Promise((resolve, reject) => {
+                const directionsService = new google.maps.DirectionsService();
+                directionsService.route(
+                    {
+                        origin,
+                        destination,
+                        travelMode: google.maps.TravelMode.DRIVING,
+                    },
+                    (response, status) => {
+                        if (status === "OK") {
+                            directionsRenderer.setDirections(response);
+                            const leg = response.routes[0].legs[0];
+                            resolve({
+                                distance: leg.distance.value,
+                                duration: leg.duration.value,
+                                price: calculatePrice(leg.distance.value),
+                                leg: leg
+                            });
+                        } else {
+                            reject(new Error("Não foi possível calcular a rota"));
+                        }
+                    }
+                );
+            });
+        }
+
+        function calculatePrice(distanceInMeters) {
+            const basePrice = 5.00; // Taxa base
+            const pricePerKm = 2.00; // Preço por km
+            const distanceInKm = distanceInMeters / 1000;
+            return (basePrice + (distanceInKm * pricePerKm)).toFixed(2);
+        }
+
+        function showRideStatus(routeDetails) {
+            const rideStatus = document.getElementById('rideStatus');
+            const rideInfo = document.getElementById('rideInfo');
+            
+            rideInfo.innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-lg mb-2">Detalhes da Viagem</h4>
+                        <p><strong>Distância:</strong> ${routeDetails.leg.distance.text}</p>
+                        <p><strong>Tempo estimado:</strong> ${routeDetails.leg.duration.text}</p>
+                        <p><strong>Preço estimado:</strong> R$ ${routeDetails.price}</p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg" id="statusUpdate">
+                        <p class="text-yellow-700">Procurando motorista...</p>
+                    </div>
+                    <button onclick="cancelRide()" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600">
+                        Cancelar Corrida
+                    </button>
+                </div>
+            `;
+            
+            rideStatus.classList.remove('hidden');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('appState');
+            currentUser = null;
+            currentRide = null;
+            showLoginScreen();
+        }
+
+        async function checkAuth() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showLoginScreen();
+                return;
+            }
+
+            const state = loadAppState();
+            if (state) {
+                // Restaura o estado do usuário
+                document.getElementById('userName').textContent = state.currentUser.email;
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('loginScreen').classList.add('hidden');
+
+                // Restaura a tela correta
+                if (state.isDriver) {
+                    showDriverScreen();
+                    if (currentRide) {
+                        showCurrentRide(currentRide);
+                    } else {
+                        startAvailableRidesPolling();
+                    }
+                } else {
+                    showMainScreen();
+                    if (currentRide) {
+                        try {
+                            // Restaura o estado da corrida para passageiro
+                            const response = await fetch(`/rides/${currentRide._id}/status`, {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error('Falha ao recuperar status da corrida');
+                            }
+
+                            const data = await response.json();
+                            if (data.success) {
+                                // Mostra o status da corrida
+                                document.getElementById('rideStatus').classList.remove('hidden');
+                                updateRideStatus(data.ride);
+                                
+                                // Atualiza o mapa com a rota
+                                const origin = document.getElementById('origin');
+                                const destination = document.getElementById('destination');
+                                origin.value = data.ride.origin;
+                                destination.value = data.ride.destination;
+                                
+                                // Recalcula e mostra a rota no mapa
+                                calculateRoute(data.ride.origin, data.ride.destination);
+                                
+                                // Inicia o polling de status
+                                initializeRidePolling();
+                            }
+                        } catch (error) {
+                            console.error('Erro ao recuperar corrida:', error);
+                            // Se houver erro, limpa o estado da corrida
+                            currentRide = null;
+                            saveAppState();
+                        }
+                    }
+                }
+            } else {
+                showLoginScreen();
+            }
+        }
+
+        async function initializeRidePolling() {
+            if (currentRide) {
+                setInterval(async () => {
+                    try {
+                        const response = await fetch(`/rides/${currentRide._id}/status`, {
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            }
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            currentRide = data.ride;
+                            updateRideStatus(data.ride);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao atualizar status:', error);
+                    }
+                }, 5000); // Atualiza a cada 5 segundos
+            }
+        }
+
+        async function cancelRide() {
+            if (!currentRide) return;
+
+            try {
+                const response = await fetch(`/rides/${currentRide.id}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    currentRide = null;
+                    document.getElementById('rideStatus').classList.add('hidden');
+                    alert('Corrida cancelada com sucesso');
+                }
+            } catch (error) {
+                console.error('Erro ao cancelar corrida:', error);
+                alert('Não foi possível cancelar a corrida');
+            }
+        }
+
+        function startRideStatusPolling() {
+            if (!currentRide) return;
+
+            const statusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/rides/${currentRide.id}/status`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        }
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        updateRideStatus(data.ride);
+                        
+                        // Se a corrida foi finalizada ou cancelada, para o polling
+                        if (['completed', 'cancelled'].includes(data.ride.status)) {
+                            clearInterval(statusInterval);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar status:', error);
+                }
+            }, 5000); // Atualiza a cada 5 segundos
+        }
+
+        function updateRideStatus(ride) {
+            const statusDiv = document.getElementById('rideStatus');
+            const rideInfo = document.getElementById('rideInfo');
+            const rideForm = document.getElementById('rideForm').closest('.bg-white'); // Pega o container do formulário
+            
+            statusDiv.classList.remove('hidden');
+            rideForm.classList.add('hidden'); // Esconde o formulário durante corrida ativa
+
+            let statusText = '';
+            let statusClass = '';
+            let additionalInfo = '';
+
+            switch (ride.status) {
+                case 'searching':
+                    statusText = 'Procurando motorista...';
+                    statusClass = 'bg-yellow-100 text-yellow-800';
+                    break;
+                case 'accepted':
+                    statusText = 'Motorista a caminho';
+                    statusClass = 'bg-blue-100 text-blue-800';
+                    additionalInfo = `
+                        <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                            <h4 class="font-bold mb-2">Informações do Motorista</h4>
+                            <p><strong>Nome:</strong> ${ride.driver.name}</p>
+                            <p><strong>Veículo:</strong> ${ride.driver.car}</p>
+                        </div>
+                        <div id="driverLocationInfo" class="mt-4">
+                            <!-- Informações de localização do motorista serão atualizadas aqui -->
+                        </div>
+                    `;
+                    break;
+                case 'in_progress':
+                    statusText = 'Em viagem';
+                    statusClass = 'bg-green-100 text-green-800';
+                    additionalInfo = `
+                        <div class="mt-4 p-4 bg-green-50 rounded-lg">
+                            <h4 class="font-bold mb-2">Viagem em Andamento</h4>
+                            <p><strong>Motorista:</strong> ${ride.driver.name}</p>
+                            <p><strong>Início:</strong> ${new Date(ride.startTime).toLocaleTimeString()}</p>
+                        </div>
+                    `;
+                    break;
+                case 'completed':
+                    statusText = 'Viagem finalizada';
+                    statusClass = 'bg-green-100 text-green-800';
+                    const endTime = new Date(ride.endTime);
+                    const duration = Math.round((endTime - new Date(ride.startTime)) / 1000 / 60);
+                    additionalInfo = `
+                        <div class="mt-4 p-4 bg-green-50 rounded-lg">
+                            <h4 class="font-bold mb-2">Resumo da Viagem</h4>
+                            <p><strong>Duração:</strong> ${duration} minutos</p>
+                            <p><strong>Valor:</strong> R$ ${ride.actualPrice.toFixed(2)}</p>
+                            <button onclick="requestNewRide()" class="mt-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                                Solicitar Nova Corrida
+                            </button>
+                        </div>
+                    `;
+                    break;
+                case 'cancelled':
+                    statusText = 'Corrida cancelada';
+                    statusClass = 'bg-red-100 text-red-800';
+                    additionalInfo = `
+                        <button onclick="requestNewRide()" class="mt-4 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                            Solicitar Nova Corrida
+                        </button>
+                    `;
+                    break;
+            }
+
+            rideInfo.innerHTML = `
+                <div class="p-4 ${statusClass} rounded-lg">
+                    <h4 class="font-bold">${statusText}</h4>
+                </div>
+                ${additionalInfo}
+            `;
+            currentRide = ride;
+            saveAppState();
+
+            // Se a corrida for finalizada ou cancelada, mostra o formulário novamente
+            if (ride.status === 'completed' || ride.status === 'cancelled') {
+                rideForm.classList.remove('hidden');
+            }
+        }
+
+        // Adicione esta função para limpar o estado da corrida quando solicitar nova corrida
+        function requestNewRide() {
+            document.getElementById('rideStatus').classList.add('hidden');
+            document.getElementById('rideForm').closest('.bg-white').classList.remove('hidden');
+            document.getElementById('rideForm').reset();
+            currentRide = null;
+            saveAppState();
+        }
+
+        // Funções do Motorista
+        function initializeDriverMode() {
+            const statusToggle = document.getElementById('statusToggle');
+            statusToggle.addEventListener('change', toggleDriverStatus);
+            
+            // Inicializa polling de corridas disponíveis
+            startAvailableRidesPolling();
+        }
+
+        function toggleDriverStatus(e) {
+            const isOnline = e.target.checked;
+            const statusText = document.getElementById('driverStatus');
+            statusText.textContent = isOnline ? 'Online' : 'Offline';
+            statusText.className = isOnline ? 'text-green-600' : 'text-gray-600';
+
+            if (isOnline) {
+                startAvailableRidesPolling();
+            } else {
+                stopAvailableRidesPolling();
+            }
+        }
+
+        function startAvailableRidesPolling() {
+            // Limpa intervalo anterior se existir
+            if (availableRidesInterval) {
+                clearInterval(availableRidesInterval);
+            }
+
+            // Faz primeira busca imediatamente
+            fetchAvailableRides();
+
+            // Configura polling
+            availableRidesInterval = setInterval(fetchAvailableRides, 5000);
+        }
+
+        // Nova função para buscar corridas
+        async function fetchAvailableRides() {
+            try {
+                const response = await fetch('/rides/available', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (data.success) {
+                    updateAvailableRides(data.rides);
+                }
+            } catch (error) {
+                console.error('Erro ao buscar corridas:', error);
+                // Não mostra alerta para não irritar o usuário
+                // Apenas atualiza a interface mostrando que não há corridas
+                updateAvailableRides([]);
+            }
+        }
+
+        function updateAvailableRides(rides) {
+            const container = document.getElementById('availableRides');
+            container.innerHTML = '';
+
+            if (!rides || rides.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">Nenhuma corrida disponível no momento</p>';
+                return;
+            }
+
+            rides.forEach(ride => {
+                const rideCard = document.createElement('div');
+                rideCard.className = 'bg-gray-50 p-4 rounded-lg';
+                rideCard.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Origem</p>
+                            <p class="font-medium">${ride.origin}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Destino</p>
+                            <p class="font-medium">${ride.destination}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Distância</p>
+                            <p class="font-medium">${(ride.distance / 1000).toFixed(1)} km</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Valor Estimado</p>
+                            <p class="font-medium">R$ ${ride.estimatedPrice.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <button 
+                        onclick="acceptRide('${ride._id}')" 
+                        class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
+                    >
+                        Aceitar Corrida
+                    </button>
+                `;
+                container.appendChild(rideCard);
+            });
+        }
+
+        async function acceptRide(rideId) {
+            try {
+                const response = await fetch(`/rides/${rideId}/accept`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showCurrentRide(data.ride);
+                    stopAvailableRidesPolling();
+                }
+            } catch (error) {
+                console.error('Erro ao aceitar corrida:', error);
+                alert('Não foi possível aceitar a corrida');
+            }
+        }
+
+        function showCurrentRide(ride) {
+            document.getElementById('currentRideCard').classList.remove('hidden');
+            document.getElementById('passengerName').textContent = ride.passenger.name;
+            document.getElementById('currentRideOrigin').textContent = ride.origin;
+            document.getElementById('currentRideDestination').textContent = ride.destination;
+
+            // Adicione um mapa para o motorista
+            if (!document.getElementById('driverMap')) {
+                const mapDiv = document.createElement('div');
+                mapDiv.id = 'driverMap';
+                mapDiv.style.height = '400px';
+                mapDiv.style.marginTop = '20px';
+                mapDiv.className = 'rounded-lg';
+                document.getElementById('currentRideInfo').insertBefore(mapDiv, document.getElementById('currentRideInfo').firstChild);
+                
+                // Inicializa o mapa do motorista
+                initializeDriverMap();
+            }
+
+            // Atualiza visibilidade dos botões baseado no status
+            const startBtn = document.getElementById('startRideBtn');
+            const finishBtn = document.getElementById('finishRideBtn');
+            const cancelBtn = document.getElementById('cancelRideBtn');
+            
+            // Adiciona os event listeners
+            startBtn.onclick = () => startRide(ride._id);
+            finishBtn.onclick = () => finishRide(ride._id);
+            cancelBtn.onclick = () => cancelRide(ride._id);
+            
+            if (ride.status === 'accepted') {
+                // Mostra rota até o passageiro
+                showRouteToPassenger(ride.origin);
+                startBtn.classList.remove('hidden');
+                finishBtn.classList.add('hidden');
+            } else if (ride.status === 'in_progress') {
+                // Mostra rota até o destino
+                showRouteToDestination(ride.origin, ride.destination);
+                startBtn.classList.add('hidden');
+                finishBtn.classList.remove('hidden');
+            }
+            currentRide = ride;
+            saveAppState();
+        }
+
+        async function startRide(rideId) {
+            try {
+                const response = await fetch(`/rides/${rideId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showCurrentRide(data.ride);
+                    // Atualiza o mapa com a rota atual
+                    calculateRoute(data.ride.origin, data.ride.destination);
+                }
+            } catch (error) {
+                console.error('Erro ao iniciar corrida:', error);
+                alert('Não foi possível iniciar a corrida');
+            }
+        }
+
+        async function finishRide(rideId) {
+            try {
+                const response = await fetch(`/rides/${rideId}/finish`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // Atualiza estatísticas do motorista
+                    updateDriverStats();
+                    // Limpa a corrida atual
+                    document.getElementById('currentRideCard').classList.add('hidden');
+                    // Volta a mostrar corridas disponíveis
+                    startAvailableRidesPolling();
+                }
+            } catch (error) {
+                console.error('Erro ao finalizar corrida:', error);
+                alert('Não foi possível finalizar a corrida');
+            }
+        }
+
+        // Função para atualizar estatísticas do motorista
+        async function updateDriverStats() {
+            try {
+                const response = await fetch('/rides/driver/stats', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('ridesCount').textContent = data.stats.ridesCount;
+                    document.getElementById('earningsToday').textContent = data.stats.earningsToday.toFixed(2);
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar estatísticas:', error);
+            }
+        }
+
+        function stopAvailableRidesPolling() {
+            clearInterval(availableRidesInterval);
+        }
+
+        function initializeDriverMap() {
+            driverMap = new google.maps.Map(document.getElementById('driverMap'), {
+                center: { lat: -23.550520, lng: -46.633308 }, // São Paulo
+                zoom: 12,
+                mapTypeControl: false
+            });
+            driverDirectionsRenderer = new google.maps.DirectionsRenderer();
+            driverDirectionsRenderer.setMap(driverMap);
+        }
+
+        function showRouteToPassenger(passengerLocation) {
+            // Obter localização atual do motorista
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const driverLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        calculateDriverRoute(driverLocation, passengerLocation, 'toPassenger');
+                    },
+                    (error) => {
+                        console.error('Erro ao obter localização:', error);
+                        alert('Não foi possível obter sua localização atual');
+                    }
+                );
+            }
+        }
+
+        function showRouteToDestination(origin, destination) {
+            calculateDriverRoute(origin, destination, 'toDestination');
+        }
+
+        function calculateDriverRoute(origin, destination, type) {
+            const directionsService = new google.maps.DirectionsService();
+            directionsService.route(
+                {
+                    origin: origin,
+                    destination: destination,
+                    travelMode: google.maps.TravelMode.DRIVING,
+                },
+                (response, status) => {
+                    if (status === "OK") {
+                        driverDirectionsRenderer.setDirections(response);
+                        const leg = response.routes[0].legs[0];
+                        
+                        // Atualiza informações da rota
+                        const routeInfo = document.createElement('div');
+                        routeInfo.className = 'mt-4 p-4 bg-blue-50 rounded-lg';
+                        routeInfo.innerHTML = `
+                            <p class="font-medium">
+                                ${type === 'toPassenger' ? 'Distância até o passageiro' : 'Distância até o destino'}:
+                                ${leg.distance.text}
+                            </p>
+                            <p class="text-gray-600">
+                                Tempo estimado: ${leg.duration.text}
+                            </p>
+                        `;
+
+                        // Atualiza ou adiciona as informações da rota
+                        const existingRouteInfo = document.querySelector('.route-info');
+                        if (existingRouteInfo) {
+                            existingRouteInfo.replaceWith(routeInfo);
+                        } else {
+                            document.getElementById('currentRideInfo').insertBefore(
+                                routeInfo,
+                                document.getElementById('currentRideInfo').firstChild.nextSibling
+                            );
+                        }
+                        routeInfo.classList.add('route-info');
+                    }
+                }
+            );
+        }
+
+        // Adicione event listeners para salvar estado em mudanças importantes:
+        window.addEventListener('beforeunload', saveAppState);
+
+        // Carregue o Google Maps de forma assíncrona no final do body
+        window.addEventListener('DOMContentLoaded', () => {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyAVe7W-B0zZa-6ePrcLfZkDzs1RGRSHSCc&libraries=places&callback=initGoogleMaps`;
+            script.async = true;
+            script.defer = true;
+            document.body.appendChild(script);
+        });
+    </script>
+</body>
+</html> 

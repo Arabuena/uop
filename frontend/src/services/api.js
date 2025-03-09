@@ -1,61 +1,63 @@
 import axios from 'axios';
 
-const getBaseURL = () => {
-  // Em produção, sempre usar o proxy
-  if (window.location.hostname.includes('vercel.app')) {
-    console.log('Ambiente de produção detectado, usando proxy');
-    // Remover o /api da URL base pois será adicionado nas rotas
-    return '';
-  }
-  
-  // Em desenvolvimento local
-  console.log('Ambiente de desenvolvimento detectado');
-  return 'http://localhost:5000';
-};
-
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   }
 });
 
-// Interceptor para logs e ajuste de URL
+// Log de configuração
+console.log('API Configuration:', {
+  environment: process.env.NODE_ENV,
+  baseURL: api.defaults.baseURL,
+  apiUrl: process.env.REACT_APP_API_URL
+});
+
+// Interceptor para requisições
 api.interceptors.request.use(
   config => {
-    // Adiciona /api nas requisições em produção
-    if (window.location.hostname.includes('vercel.app')) {
-      config.url = '/api' + config.url;
-    }
-    
-    console.log('API Request:', config.url);
-    console.log('API Base URL:', config.baseURL);
-    console.log('Full URL:', config.baseURL + config.url);
     const token = localStorage.getItem('token');
-    console.log('Token sendo enviado:', token);
     
+    console.log('Making request:', {
+      method: config.method,
+      url: config.url,
+      fullUrl: `${config.baseURL}${config.url}`,
+      hasToken: !!token
+    });
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
     return config;
   },
   error => {
-    console.error('API Request Error:', error);
+    console.error('Request Error:', error);
     return Promise.reject(error);
   }
 );
 
+// Interceptor para respostas
 api.interceptors.response.use(
   response => {
-    console.log('API Response:', response.status);
+    console.log('Response Success:', {
+      status: response.status,
+      url: response.config.url,
+      data: response.data
+    });
     return response;
   },
   error => {
-    console.error('API Response Error:', error);
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+    if (error.response) {
+      console.error('Response Error:', {
+        status: error.response.status,
+        data: error.response.data,
+        url: error.config.url
+      });
+    } else {
+      console.error('Network Error:', error.message);
     }
     return Promise.reject(error);
   }
