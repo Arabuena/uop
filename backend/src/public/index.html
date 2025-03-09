@@ -422,12 +422,16 @@
                     document.getElementById('userInfo').classList.remove('hidden');
                     document.getElementById('loginScreen').classList.add('hidden');
 
-                    // Verifica o tipo de usuário e mostra a tela apropriada
-                    if (currentUser.role === 'admin') {
+                    // Verifica o tipo de usuário pelo email (temporário)
+                    // TODO: Usar o role do usuário quando disponível na API
+                    if (email.includes('admin@')) {
+                        currentUser.role = 'admin'; // Define o role manualmente
                         showAdminDashboard();
-                    } else if (currentUser.role === 'driver') {
+                    } else if (email.includes('driver@')) {
+                        currentUser.role = 'driver'; // Define o role manualmente
                         showDriverScreen();
                     } else {
+                        currentUser.role = 'passenger'; // Define o role manualmente
                         showMainScreen();
                     }
                     
@@ -1282,6 +1286,125 @@
             
             // Carrega dados iniciais do dashboard
             loadAdminDashboardData();
+        }
+
+        // Adicione a função loadAdminDashboardData:
+        async function loadAdminDashboardData() {
+            try {
+                // Carrega estatísticas
+                const statsResponse = await fetch('/admin/stats', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const statsData = await statsResponse.json();
+
+                // Carrega motoristas pendentes
+                const driversResponse = await fetch('/admin/pending-drivers', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const driversData = await driversResponse.json();
+
+                // Atualiza o conteúdo do dashboard
+                const dashboardContent = document.getElementById('adminDashboardContent');
+                dashboardContent.innerHTML = `
+                    <!-- Estatísticas -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-lg font-semibold text-gray-600">Motoristas Ativos</h3>
+                            <p class="text-3xl font-bold">${statsData.activeDrivers || 0}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-lg font-semibold text-gray-600">Motoristas Pendentes</h3>
+                            <p class="text-3xl font-bold">${statsData.pendingDrivers || 0}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-lg font-semibold text-gray-600">Total de Passageiros</h3>
+                            <p class="text-3xl font-bold">${statsData.totalPassengers || 0}</p>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Motoristas Pendentes -->
+                    <div class="bg-white p-6 rounded-lg shadow mt-6">
+                        <h3 class="text-xl font-semibold mb-4">Motoristas Pendentes</h3>
+                        ${driversData.length > 0 ? `
+                            <div class="divide-y">
+                                ${driversData.map(driver => `
+                                    <div class="py-4">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h4 class="font-medium">${driver.name}</h4>
+                                                <p class="text-sm text-gray-600">${driver.email}</p>
+                                                <p class="text-sm text-gray-600">Veículo: ${driver.vehicle?.model || 'N/A'}</p>
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button onclick="approveDriver('${driver._id}')" 
+                                                    class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600">
+                                                    Aprovar
+                                                </button>
+                                                <button onclick="rejectDriver('${driver._id}')"
+                                                    class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600">
+                                                    Rejeitar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : '<p class="text-gray-500">Nenhum motorista pendente</p>'}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Erro ao carregar dados do dashboard:', error);
+                document.getElementById('adminDashboardContent').innerHTML = `
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                        Erro ao carregar dados do dashboard
+                    </div>
+                `;
+            }
+        }
+
+        // Adicione as funções de aprovação/rejeição de motoristas:
+        async function approveDriver(driverId) {
+            try {
+                const response = await fetch(`/admin/approve-driver/${driverId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    loadAdminDashboardData(); // Recarrega os dados
+                    alert('Motorista aprovado com sucesso!');
+                }
+            } catch (error) {
+                console.error('Erro ao aprovar motorista:', error);
+                alert('Erro ao aprovar motorista');
+            }
+        }
+
+        async function rejectDriver(driverId) {
+            if (!confirm('Tem certeza que deseja rejeitar este motorista?')) return;
+            
+            try {
+                const response = await fetch(`/admin/reject-driver/${driverId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    loadAdminDashboardData(); // Recarrega os dados
+                    alert('Motorista rejeitado com sucesso!');
+                }
+            } catch (error) {
+                console.error('Erro ao rejeitar motorista:', error);
+                alert('Erro ao rejeitar motorista');
+            }
         }
     </script>
 </body>
