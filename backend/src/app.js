@@ -4,6 +4,8 @@ const path = require('path');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const ridesRouter = require('./routes/rides');
+const adminRouter = require('./routes/admin');
+const messagesRouter = require('./routes/messages');
 
 const app = express();
 
@@ -34,8 +36,19 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/auth', authRouter);
 app.use('/health', healthRouter);
 app.use('/rides', ridesRouter);
+app.use('/admin', adminRouter);
+app.use('/messages', messagesRouter);
 
-// Servir arquivos estáticos depois das rotas da API
+// Modifique a configuração de arquivos estáticos
+app.use('/css', express.static(path.join(__dirname, 'public/css'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+  }
+}));
+
+// Mantenha a configuração geral de arquivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Rota raiz serve a página de teste
